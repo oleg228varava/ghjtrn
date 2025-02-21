@@ -1,0 +1,23 @@
+void main() {
+  List<Map<String, dynamic>> transactions = [
+    {'type': 'income', 'amount': 1500},
+    {'type': 'expense', 'amount': 500},
+    {'type': 'income', 'amount': 1200},
+    {'type': 'expense', 'amount': 300},
+  ];
+
+  List<Map<String, dynamic>> incomes = transactions.where((t) => t['type'] == 'income').toList();
+   List<Map<String, dynamic>> expenses = transactions.where((t) => t['type'] == 'expense').          
+   double totalIncome = incomes.fold(0, (sum, t) => sum + t['amount']);
+  double totalExpense = expenses.fold(0, (sum, t) => sum + t['amount']);
+
+  
+  print('Надходження:');
+  incomes.forEach((t) => print('Отримано: ${t['amount']}'));
+  
+  print('\nВитрати:');
+  expenses.forEach((t) => print('Витрачено: ${t['amount']}'));
+  
+  print('\nЗагальна сума надходжень: $totalIncome');
+  print('Загальна сума витрат: $totalExpense');
+}
