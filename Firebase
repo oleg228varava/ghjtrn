@@ -1,0 +1,185 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+void main() => runApp(const BudgetApp());
+
+class BudgetApp extends StatelessWidget {
+  const BudgetApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Бюджет',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.light(primary: Colors.teal),
+        scaffoldBackgroundColor: Colors.white,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.teal,
+          foregroundColor: Colors.white,
+          centerTitle: true,
+          titleTextStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+        ),
+      ),
+      home: const ExpenseHomePage(),
+    );
+  }
+}
+
+class Expense {
+  String category;
+  double amount;
+  DateTime date;
+
+  Expense(this.category, this.amount, this.date);
+
+  Map<String, dynamic> toJson() => {
+        'category': category,
+        'amount': amount,
+        'date': date.toIso8601String(),
+      };
+
+  factory Expense.fromJson(Map<String, dynamic> json) => Expense(
+        json['category'],
+        json['amount'],
+        DateTime.parse(json['date']),
+      );
+}
+
+class ExpenseHomePage extends StatefulWidget {
+  const ExpenseHomePage({super.key});
+
+  @override
+  State<ExpenseHomePage> createState() => _ExpenseHomePageState();
+}
+
+class _ExpenseHomePageState extends State<ExpenseHomePage> {
+  final _categoryController = TextEditingController();
+  final _amountController = TextEditingController();
+  List<Expense> _expenses = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExpenses();
+  }
+
+  Future<void> _loadExpenses() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = prefs.getStringList('expenses') ?? [];
+    setState(() {
+      _expenses = data.map((e) => Expense.fromJson(jsonDecode(e))).toList().reversed.toList();
+    });
+  }
+
+  Future<void> _saveExpenses() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = _expenses.reversed.map((e) => jsonEncode(e.toJson())).toList();
+    await prefs.setStringList('expenses', data);
+  }
+
+  Future<void> _addExpenseDialog() async {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) {
+        return Padding(
+          padding: MediaQuery.of(context).viewInsets,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: _categoryController,
+                  decoration: const InputDecoration(labelText: 'Категорія'),
+                ),
+                TextField(
+                  controller: _amountController,
+                  decoration: const InputDecoration(labelText: 'Сума'),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    final category = _categoryController.text.trim();
+                    final amount = double.tryParse(_amountController.text) ?? 0;
+                    if (category.isNotEmpty && amount > 0) {
+                      final newExpense = Expense(category, amount, DateTime.now());
+                      setState(() => _expenses.insert(0, newExpense));
+                      await _saveExpenses();
+                      _categoryController.clear();
+                      _amountController.clear();
+                      Navigator.pop(context);
+                    }
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('Додати'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _categoryController.dispose();
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Мій бюджет')),
+      body: _expenses.isEmpty
+          ? const Center(child: Text('Немає витрат', style: TextStyle(fontSize: 18)))
+          : ListView.builder(
+              itemCount: _expenses.length,
+              itemBuilder: (context, index) => ExpenseTile(
+                expense: _expenses[index],
+                onDelete: () async {
+                  setState(() => _expenses.removeAt(index));
+                  await _saveExpenses();
+                },
+              ),
+            ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _addExpenseDialog,
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+class ExpenseTile extends StatelessWidget {
+  final Expense expense;
+  final VoidCallback onDelete;
+
+  const ExpenseTile({super.key, required this.expense, required this.onDelete});
+
+  @override
+  Widget build(BuildContext context) {
+    final date = '${expense.date.day.toString().padLeft(2, '0')}.${expense.date.month.toString().padLeft(2, '0')}.${expense.date.year}';
+    final time = '${expense.date.hour}:${expense.date.minute.toString().padLeft(2, '0')}';
+
+    return ListTile(
+      title: Text(
+        '${expense.category}: ${expense.amount.toStringAsFixed(2)} грн',
+        style: TextStyle(
+          color: expense.amount > 1000 ? Colors.red : Colors.black,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      subtitle: Text('$date $time'),
+      trailing: IconButton(
+        icon: const Icon(Icons.delete_outline, color: Colors.red),
+        onPressed: onDelete,
+      ),
+    );
+  }
+}
